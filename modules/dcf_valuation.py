@@ -15,6 +15,27 @@ from .ui_components import (
     COLORS,
 )
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_info_and_cf(tkr: str):
+    """Module-level cached fetch — avoids UnserializableReturnValueError."""
+    for attempt in range(3):
+        try:
+            t  = yf.Ticker(tkr)
+            try:
+                info = dict(t.info)          # convert to plain dict
+            except Exception:
+                info = {}
+            try:
+                cf = t.cashflow
+            except Exception:
+                cf = pd.DataFrame()
+            return info, cf
+        except Exception:
+            time.sleep(2 + attempt * 2)
+    return {}, pd.DataFrame()
+
+
+
 # Color aliases
 ACCENT = COLORS["accent_blue"]
 GREEN  = COLORS["accent_green"]
@@ -48,31 +69,6 @@ def render_dcf_valuation(df, ticker, wacc, terminal_g, forecast_yrs, **kwargs):
         "using perpetuity growth model, and discounts at WACC to estimate fair value."
     )
     section_divider()
-
-    # ── Fetch fundamental data (cached + retry to avoid rate limit) ──
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def _fetch_info_and_cf(tkr: str):
-        """Cache yfinance .info and .cashflow to avoid YFRateLimitError."""
-        for attempt in range(3):
-            try:
-                t    = yf.Ticker(tkr)
-                info = t.fast_info.__dict__ if hasattr(t, "fast_info") else {}
-                # fast_info is lighter; fall back to full info
-                try:
-                    full = t.info
-                    info.update(full)
-                except Exception:
-                    pass
-                try:
-                    cf = t.cashflow
-                except Exception:
-                    cf = pd.DataFrame()
-                return info, cf
-            except Exception as e:
-                if attempt < 2:
-                    time.sleep(2 + attempt * 2)
-                else:
-                    return {}, pd.DataFrame()
 
     with st.spinner("Fetching fundamental data …"):
         info, cf = _fetch_info_and_cf(ticker)

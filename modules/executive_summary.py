@@ -73,6 +73,19 @@ def _risk(vol: float):
     else:            return "High",   RED
 
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _get_eps_pe(tkr: str):
+    """Module-level cached EPS/PE fetch."""
+    for attempt in range(3):
+        try:
+            i = yf.Ticker(tkr).info
+            return (i.get("trailingEps") or i.get("forwardEps") or 0,
+                    i.get("trailingPE")  or i.get("forwardPE")  or 20)
+        except Exception:
+            time.sleep(2)
+    return 0, 20
+
 def render_executive_summary(df, ticker, all_close, wacc, terminal_g,
                               forecast_yrs, **kwargs):
     """Module 1 — Executive Summary Panel (15 marks)."""
@@ -100,18 +113,7 @@ def render_executive_summary(df, ticker, all_close, wacc, terminal_g,
     # ── VaR 95% parametric ──
     var95 = mu_d - 1.645 * sigma_d
 
-    # ── DCF quick estimate (use fast_info to avoid rate limit) ──
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def _get_eps_pe(tkr):
-        for attempt in range(3):
-            try:
-                t = yf.Ticker(tkr)
-                i = t.info
-                return i.get("trailingEps") or i.get("forwardEps") or 0,                        i.get("trailingPE")  or i.get("forwardPE")  or 20
-            except Exception:
-                time.sleep(2)
-        return 0, 20
-
+    # ── DCF quick estimate ──
     try:
         eps, pe = _get_eps_pe(ticker)
         dcf_value = (eps * (1 + expected_return) ** forecast_yrs * pe

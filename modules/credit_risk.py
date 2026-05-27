@@ -78,6 +78,17 @@ def _safe_float(val, default=0.0):
         return default
 
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_cr_info(tkr: str) -> dict:
+    """Module-level cached fundamentals fetch."""
+    for attempt in range(3):
+        try:
+            return dict(yf.Ticker(tkr).info)
+        except Exception:
+            time.sleep(2 + attempt)
+    return {}
+
 def render_credit_risk(df, ticker, **kwargs):
     """Render Module 7 — Credit Risk."""
 
@@ -97,16 +108,6 @@ def render_credit_risk(df, ticker, **kwargs):
     X_tr, X_te, y_tr, y_te = train_test_split(X_sc, y, test_size=0.2, random_state=42)
     model = LogisticRegression(max_iter=500)
     model.fit(X_tr, y_tr)
-
-    # ── Fetch fundamentals (cached to avoid YFRateLimitError) ──
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def _fetch_cr_info(tkr):
-        for attempt in range(3):
-            try:
-                return yf.Ticker(tkr).info
-            except Exception:
-                time.sleep(2 + attempt)
-        return {}
 
     with st.spinner("Fetching fundamentals …"):
         info = _fetch_cr_info(ticker)
@@ -259,3 +260,4 @@ def render_credit_risk(df, ticker, **kwargs):
                 PD = <b>{pd_pct:.2f}%</b> | Credit Score = <b>{credit_score}</b>
             </div>""",
     )
+    
