@@ -18,6 +18,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Hide Streamlit toolbar and footer ──
+st.markdown("""<style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden;}
+</style>""", unsafe_allow_html=True)
+
 # ── Load custom CSS ──
 css_file_path = os.path.join(os.path.dirname(__file__), "styles.css")
 if os.path.exists(css_file_path):
@@ -196,8 +203,14 @@ if refresh:
 
 # ── Fetch data with status indicators ──
 status_col = st.sidebar.empty()
+
 with st.spinner(f"📡 Fetching {selected_ticker}..."):
     df = fetch_stock_data(selected_ticker, str(start_date), str(end_date))
+
+# ✅ Check if data is empty BEFORE using it
+if df is None or df.empty:
+    st.error("❌ No data available. Please check ticker or adjust date range.")
+    st.stop()
 
 with st.spinner("📊 Fetching portfolio data..."):
     all_close = fetch_all_tickers(TICKERS, str(start_date), str(end_date))
@@ -209,7 +222,6 @@ status_col.success("✅ Data loaded successfully")
 # HEADER — Premium Dashboard Header
 # ============================================================
 
-# Determine market status (simple check: if today's data exists)
 # Safe market open check — handles timezone-aware and naive DatetimeIndex
 try:
     last_date = pd.Timestamp(df.index[-1]).date()
@@ -223,10 +235,6 @@ render_header(
     end_date=str(end_date),
     market_open=market_open,
 )
-
-if df.empty:
-    st.error("❌ No data available. Please check ticker symbol or adjust date range.")
-    st.stop()
 
 
 # ============================================================
@@ -286,7 +294,7 @@ params = dict(
     all_close=all_close,
     n_simulations=n_simulations,
     mc_horizon=mc_horizon,
-    wacc=wacc / 100,  # Convert % to decimal
+    wacc=wacc / 100,
     terminal_g=terminal_g / 100,
     forecast_yrs=forecast_yrs,
     start_date=str(start_date),
