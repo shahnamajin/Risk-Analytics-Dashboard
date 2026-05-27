@@ -210,7 +210,12 @@ status_col.success("✅ Data loaded successfully")
 # ============================================================
 
 # Determine market status (simple check: if today's data exists)
-market_open = df.index[-1].date() == default_end
+# Safe market open check — handles timezone-aware and naive DatetimeIndex
+try:
+    last_date = pd.Timestamp(df.index[-1]).date()
+    market_open = last_date >= (default_end - timedelta(days=4))
+except Exception:
+    market_open = False
 
 render_header(
     ticker=selected_ticker,
