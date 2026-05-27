@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import yfinance as yf
+import time
 from modules.ui_components import investment_signal, section_divider, render_html, COLORS
 
 # ── Colour palette ──
@@ -99,11 +100,20 @@ def render_executive_summary(df, ticker, all_close, wacc, terminal_g,
     # ── VaR 95% parametric ──
     var95 = mu_d - 1.645 * sigma_d
 
-    # ── DCF quick estimate ──
+    # ── DCF quick estimate (use fast_info to avoid rate limit) ──
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _get_eps_pe(tkr):
+        for attempt in range(3):
+            try:
+                t = yf.Ticker(tkr)
+                i = t.info
+                return i.get("trailingEps") or i.get("forwardEps") or 0,                        i.get("trailingPE")  or i.get("forwardPE")  or 20
+            except Exception:
+                time.sleep(2)
+        return 0, 20
+
     try:
-        info = yf.Ticker(ticker).info
-        eps  = info.get("trailingEps") or info.get("forwardEps") or 0
-        pe   = info.get("trailingPE")  or info.get("forwardPE")  or 20
+        eps, pe = _get_eps_pe(ticker)
         dcf_value = (eps * (1 + expected_return) ** forecast_yrs * pe
                      / (1 + wacc) ** forecast_yrs) if eps and eps > 0 else current_price * 0.9
     except Exception:

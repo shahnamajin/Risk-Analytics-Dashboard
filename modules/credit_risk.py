@@ -20,6 +20,8 @@ from sklearn.metrics       import confusion_matrix, roc_curve, auc
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import yfinance as yf
+import time
+from .ui_components import render_html
 
 ACCENT = "#58a6ff"
 GREEN  = "#3fb950"
@@ -96,9 +98,18 @@ def render_credit_risk(df, ticker, **kwargs):
     model = LogisticRegression(max_iter=500)
     model.fit(X_tr, y_tr)
 
-    # ── Fetch fundamentals for selected stock ──
+    # ── Fetch fundamentals (cached to avoid YFRateLimitError) ──
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _fetch_cr_info(tkr):
+        for attempt in range(3):
+            try:
+                return yf.Ticker(tkr).info
+            except Exception:
+                time.sleep(2 + attempt)
+        return {}
+
     with st.spinner("Fetching fundamentals …"):
-        info = yf.Ticker(ticker).info
+        info = _fetch_cr_info(ticker)
 
     stock_de  = _safe_float(info.get("debtToEquity",           1.5))
     stock_ic  = _safe_float(info.get("ebitda") and
@@ -241,11 +252,10 @@ def render_credit_risk(df, ticker, **kwargs):
     c7.metric("💧 Current Ratio",      f"{stock_cr:.2f}")
 
     colour = GREEN if pd_pct < 5 else (YELLOW if pd_pct < 15 else RED)
-    st.markdown(
+    render_html(
         f"""<div style='background:{colour}22; border:1px solid {colour};
                         border-radius:8px; padding:12px 20px; margin-top:12px;'>
                 <b style='color:{colour};'>Grade {grade}</b> — 
                 PD = <b>{pd_pct:.2f}%</b> | Credit Score = <b>{credit_score}</b>
             </div>""",
-        unsafe_allow_html=True,
     )

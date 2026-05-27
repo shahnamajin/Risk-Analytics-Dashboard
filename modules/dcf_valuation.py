@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import yfinance as yf
+import time
 from .ui_components import (
     chart_container,
     section_divider,
@@ -48,14 +49,33 @@ def render_dcf_valuation(df, ticker, wacc, terminal_g, forecast_yrs, **kwargs):
     )
     section_divider()
 
-    # ── Fetch fundamental data ──
+    # ── Fetch fundamental data (cached + retry to avoid rate limit) ──
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _fetch_info_and_cf(tkr: str):
+        """Cache yfinance .info and .cashflow to avoid YFRateLimitError."""
+        for attempt in range(3):
+            try:
+                t    = yf.Ticker(tkr)
+                info = t.fast_info.__dict__ if hasattr(t, "fast_info") else {}
+                # fast_info is lighter; fall back to full info
+                try:
+                    full = t.info
+                    info.update(full)
+                except Exception:
+                    pass
+                try:
+                    cf = t.cashflow
+                except Exception:
+                    cf = pd.DataFrame()
+                return info, cf
+            except Exception as e:
+                if attempt < 2:
+                    time.sleep(2 + attempt * 2)
+                else:
+                    return {}, pd.DataFrame()
+
     with st.spinner("Fetching fundamental data …"):
-        t      = yf.Ticker(ticker)
-        info   = t.info
-        try:
-            cf = t.cashflow          # columns = fiscal years
-        except Exception:
-            cf = pd.DataFrame()
+        info, cf = _fetch_info_and_cf(ticker)
 
     shares_outstanding = _safe_float(info.get("sharesOutstanding"), 1e9)
     current_price      = float(df["Close"].squeeze().iloc[-1])
