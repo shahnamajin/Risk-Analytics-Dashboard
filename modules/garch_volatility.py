@@ -109,13 +109,27 @@ def render_garch_volatility(df, ticker, **kwargs):
         annotation_text="25th pct", row=2, col=1,
     )
     # Mark highest volatility spike with vertical dashed line (3b)
+    # add_vline does not support row/col — use add_shape for subplot targeting
     if spike_date_ts is not None:
-        fig.add_vline(
-            x=spike_date_ts, line_dash="dash", line_color=RED,
-            annotation_text=f"Peak: {spike_date}",
-            annotation_font_color=RED,
-            row=2, col=1,
-        )
+        try:
+            x_val = spike_date_ts.timestamp() * 1000   # plotly uses ms timestamps
+            fig.add_shape(
+                type="line",
+                x0=x_val, x1=x_val,
+                y0=0, y1=1,
+                xref="x2", yref="y2 domain",
+                line=dict(color=RED, width=1.5, dash="dash"),
+            )
+            fig.add_annotation(
+                x=spike_date_ts, y=1,
+                xref="x2", yref="y2 domain",
+                text=f"Peak: {spike_date}",
+                showarrow=False,
+                font=dict(color=RED, size=10),
+                xanchor="left", yanchor="bottom",
+            )
+        except Exception:
+            pass   # skip annotation if timestamp conversion fails
 
     # Rolling historical vol
     fig.add_trace(go.Scatter(
